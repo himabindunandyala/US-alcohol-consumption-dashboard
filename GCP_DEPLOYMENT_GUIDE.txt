@@ -1,0 +1,219 @@
+# GCP Deployment Guide
+# US Alcohol Consumption Dashboard — DSA 506
+# ─────────────────────────────────────────────────────────────
+
+OVERVIEW
+--------
+You will deploy this Streamlit dashboard to Google Cloud Run,
+which gives you a public HTTPS URL at zero cost for low traffic.
+Total time: approximately 20 minutes.
+
+Your project folder must contain these files before you start:
+
+    alcohol-dashboard/
+    ├── app.py
+    ├── requirements.txt
+    ├── Dockerfile
+    ├── .dockerignore
+    ├── .streamlit/
+    │   └── config.toml
+    └── niaaa_apparent_per_capita_consumption_1977_2023.csv
+
+
+═══════════════════════════════════════════════════════════════
+STEP 1 — INSTALL GOOGLE CLOUD CLI ON YOUR COMPUTER
+═══════════════════════════════════════════════════════════════
+
+1. Go to: https://cloud.google.com/sdk/docs/install
+2. Download the installer for your operating system (Windows/Mac/Linux)
+3. Run the installer and follow the prompts
+4. After install, open a NEW terminal (Command Prompt or PowerShell on Windows,
+   Terminal on Mac/Linux) and run:
+
+        gcloud --version
+
+   You should see version numbers printed. If you get "command not found",
+   restart your terminal and try again.
+
+
+═══════════════════════════════════════════════════════════════
+STEP 2 — CREATE A GOOGLE CLOUD ACCOUNT AND PROJECT
+═══════════════════════════════════════════════════════════════
+
+1. Go to: https://console.cloud.google.com
+2. Sign in with your Google account (create one if needed)
+3. Click "Select a project" at the top, then "New Project"
+4. Name it something like: alcohol-dashboard
+5. Note the Project ID shown below the name (it may look like
+   alcohol-dashboard-123456). You will need this exact ID later.
+6. Click CREATE and wait for it to finish.
+
+IMPORTANT: Google Cloud requires a billing account to be linked
+even for free services. Go to Billing in the left menu and add
+a credit card. Cloud Run has a generous free tier — for a class
+project with low traffic, you will NOT be charged.
+
+
+═══════════════════════════════════════════════════════════════
+STEP 3 — ENABLE REQUIRED APIs
+═══════════════════════════════════════════════════════════════
+
+In your terminal, run these two commands one at a time:
+
+    gcloud services enable run.googleapis.com
+    gcloud services enable artifactregistry.googleapis.com
+
+Each one will take about 30 seconds. You will see "Operation finished" when done.
+
+
+═══════════════════════════════════════════════════════════════
+STEP 4 — LOG IN AND SET YOUR PROJECT
+═══════════════════════════════════════════════════════════════
+
+Run these commands in your terminal:
+
+    gcloud auth login
+
+A browser window will open. Log in with the same Google account
+you used in Step 2.
+
+Then set your project (replace YOUR_PROJECT_ID with your actual project ID):
+
+    gcloud config set project YOUR_PROJECT_ID
+
+Example:
+    gcloud config set project alcohol-dashboard-123456
+
+Verify it worked:
+    gcloud config get-value project
+
+It should print your project ID.
+
+
+═══════════════════════════════════════════════════════════════
+STEP 5 — NAVIGATE TO YOUR PROJECT FOLDER
+═══════════════════════════════════════════════════════════════
+
+In your terminal, go to the folder that contains all your files.
+
+On Windows (example):
+    cd C:\Users\YourName\Downloads\alcohol-dashboard
+
+On Mac/Linux (example):
+    cd ~/Downloads/alcohol-dashboard
+
+Confirm you are in the right place:
+    ls         (Mac/Linux)
+    dir        (Windows)
+
+You should see: app.py, requirements.txt, Dockerfile, and the CSV file listed.
+
+
+═══════════════════════════════════════════════════════════════
+STEP 6 — BUILD AND PUSH THE DOCKER IMAGE
+═══════════════════════════════════════════════════════════════
+
+This command builds your app into a Docker container and sends it
+to Google Cloud. It takes 3-5 minutes.
+
+Run this single command (replace YOUR_PROJECT_ID with your actual project ID):
+
+    gcloud builds submit --tag gcr.io/YOUR_PROJECT_ID/alcohol-dashboard
+
+Example:
+    gcloud builds submit --tag gcr.io/alcohol-dashboard-123456/alcohol-dashboard
+
+You will see a long log of output. At the end you should see:
+    SUCCESS
+
+If you see an error about Cloud Build API, run:
+    gcloud services enable cloudbuild.googleapis.com
+Then re-run the build command.
+
+
+═══════════════════════════════════════════════════════════════
+STEP 7 — DEPLOY TO CLOUD RUN
+═══════════════════════════════════════════════════════════════
+
+Run this command (replace YOUR_PROJECT_ID with your actual project ID):
+
+    gcloud run deploy alcohol-dashboard \
+      --image gcr.io/YOUR_PROJECT_ID/alcohol-dashboard \
+      --platform managed \
+      --region us-east1 \
+      --allow-unauthenticated \
+      --memory 1Gi \
+      --port 8080
+
+When asked "Allow unauthenticated invocations?", type Y and press Enter.
+
+Wait about 1-2 minutes. At the end you will see a line like:
+
+    Service URL: https://alcohol-dashboard-xxxxxxxxxx-ue.a.run.app
+
+THAT IS YOUR PUBLIC URL. Copy it. Open it in a browser to verify it loads.
+
+
+═══════════════════════════════════════════════════════════════
+STEP 8 — VERIFY YOUR DEPLOYMENT
+═══════════════════════════════════════════════════════════════
+
+1. Open the URL from Step 7 in your browser
+2. The dashboard should load within 10-15 seconds
+   (first load may be slower — Cloud Run "wakes up" on first request)
+3. Test the sidebar navigation: click through all pages
+4. Test the year slider on the State Comparisons page
+5. Test the drink type checkboxes on the Drink Type Trends page
+6. Make sure all 7+ charts render correctly
+
+If the page does not load, check logs:
+    gcloud run logs read alcohol-dashboard --region us-east1
+
+
+═══════════════════════════════════════════════════════════════
+TROUBLESHOOTING
+═══════════════════════════════════════════════════════════════
+
+Problem: "gcloud: command not found"
+Fix: Restart your terminal after installing the CLI. On Windows,
+     open a new Command Prompt, not PowerShell.
+
+Problem: "Permission denied" or "IAM" errors
+Fix: Make sure you are logged in with the same account that owns
+     the project. Run: gcloud auth login
+
+Problem: Build fails with "Dockerfile not found"
+Fix: Make sure you are inside the alcohol-dashboard folder when
+     you run the build command. Run: ls (or dir) to confirm.
+
+Problem: Dashboard loads but shows an error about the CSV file
+Fix: Make sure the CSV file is in the same folder as app.py and
+     is named exactly: niaaa_apparent_per_capita_consumption_1977_2023.csv
+
+Problem: "Quota exceeded" or billing error
+Fix: Go to console.cloud.google.com, click Billing, and make sure
+     a credit card is linked to your account.
+
+Problem: App is very slow on first load
+This is normal. Cloud Run scales to zero when idle. The first request
+after a period of inactivity takes 10-20 seconds to "cold start".
+Subsequent requests are fast.
+
+
+═══════════════════════════════════════════════════════════════
+HOW TO UPDATE THE DASHBOARD LATER
+═══════════════════════════════════════════════════════════════
+
+If you make changes to app.py or any file, just repeat Steps 6 and 7.
+The new version will replace the old one automatically.
+
+
+═══════════════════════════════════════════════════════════════
+WHAT TO SUBMIT
+═══════════════════════════════════════════════════════════════
+
+For the project submission you need:
+1. The public URL from Step 7 (paste this in Brightspace)
+2. Your code files (app.py, requirements.txt, Dockerfile, config.toml)
+3. Your written summary (separate document)
+4. Your video presentation (recorded separately)
